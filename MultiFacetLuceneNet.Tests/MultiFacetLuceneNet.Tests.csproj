@@ -66,6 +66,7 @@
   <ItemGroup>
     <Compile Include="DocumentExtensions.cs" />
     <Compile Include="FacetSearcherTest.cs" />
+    <Compile Include="PerformanceTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

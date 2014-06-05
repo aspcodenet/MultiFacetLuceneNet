@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiFacetLucene", "MultiFa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiFacetLuceneNet.Tests", "MultiFacetLuceneNet.Tests\MultiFacetLuceneNet.Tests.csproj", "{F29DAEA8-7267-4230-B2F6-70062D2E890B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PerformanceTest", "PerformanceTest\PerformanceTest.csproj", "{0065E899-596D-4B16-9CF5-E917DD957DAB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{F29DAEA8-7267-4230-B2F6-70062D2E890B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F29DAEA8-7267-4230-B2F6-70062D2E890B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F29DAEA8-7267-4230-B2F6-70062D2E890B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0065E899-596D-4B16-9CF5-E917DD957DAB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0065E899-596D-4B16-9CF5-E917DD957DAB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0065E899-596D-4B16-9CF5-E917DD957DAB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0065E899-596D-4B16-9CF5-E917DD957DAB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

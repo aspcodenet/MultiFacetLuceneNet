@@ -1,11 +1,7 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
@@ -16,6 +12,7 @@ namespace MultiFacetLucene
     public class FacetSearcher : IndexSearcher
     {
         private readonly ConcurrentDictionary<string, FacetValues> _facetBitSetDictionary = new ConcurrentDictionary<string, FacetValues>();
+
         public FacetSearcher(Directory path)
             : base(path)
         {
@@ -29,15 +26,18 @@ namespace MultiFacetLucene
         {
         }
 
-        public FacetSearcher(IndexReader reader, IndexReader[] subReaders, int[] docStarts) : base(reader, subReaders, docStarts)
+        public FacetSearcher(IndexReader reader, IndexReader[] subReaders, int[] docStarts)
+            : base(reader, subReaders, docStarts)
         {
         }
 
         public FacetSearchResult SearchWithFacets(Query baseQueryWithoutFacetDrilldown, int topResults, List<SelectedFacet> selectedFacets, IEnumerable<string> facetAttributeFieldNames)
         {
-            var hits = Search(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, selectedFacets,null), topResults);
+            var hits = Search(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, selectedFacets, null), topResults);
 
-            var facets = GetAllFacetsValues(baseQueryWithoutFacetDrilldown, facetAttributeFieldNames, selectedFacets).Where(x => x.Count > 0).ToList();
+            var facets = GetAllFacetsValues(baseQueryWithoutFacetDrilldown, facetAttributeFieldNames, selectedFacets)
+                .Where(x => x.Count > 0)
+                .ToList();
             var va = facets.Where(x => x.Count > 1);
             return new FacetSearchResult()
             {
@@ -52,43 +52,21 @@ namespace MultiFacetLucene
             return _facetBitSetDictionary.GetOrAdd(facetAttributeFieldName, ReadBitSetsForValues);
         }
 
-        private class FacetValues
-        {
-            public FacetValues()
-            {
-                FacetValueBitSetList = new List<FacetValueBitSet>();
-            }
-            public string Term { get; set; }
-
-            public class FacetValueBitSet
-            {
-                public string Value { get; set; }
-                public OpenBitSetDISI OpenBitSetDISI { get; set; }
-                public Filter Filter { get; set; }
-            }
-
-            public List<FacetValueBitSet> FacetValueBitSetList { get; set; }
-        }
-
         private FacetValues ReadBitSetsForValues(string facetAttributeFieldName)
         {
             var facetValues = new FacetValues();
             facetValues.Term = facetAttributeFieldName;
 
-            facetValues.FacetValueBitSetList.AddRange( GetFacetValueTerms(facetAttributeFieldName).Select(fvt=>new FacetValues.FacetValueBitSet
-            {
-                Value = fvt.Term,
-                Filter = fvt.Filter,
-                OpenBitSetDISI = new OpenBitSetDISI(fvt.Filter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc)
-            }) );
+            facetValues.FacetValueBitSetList.AddRange(
+                GetFacetValueTerms(facetAttributeFieldName).Select(fvt => new FacetValues.FacetValueBitSet
+                {
+                    Value = fvt.Term,
+                    Filter = fvt.Filter,
+                    OpenBitSetDISI =
+                        new OpenBitSetDISI(fvt.Filter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc)
+                }));
 
             return facetValues;
-        }
-
-        private class FacetValueTermFilter
-        {
-            public string Term { get; set; }
-            public Filter Filter { get; set; }
         }
 
         private IEnumerable<FacetValueTermFilter> GetFacetValueTerms(string facetAttributeFieldName)
@@ -101,27 +79,37 @@ namespace MultiFacetLucene
 
                 var facetQuery = new TermQuery(termReader.Term.CreateTerm(termReader.Term.Text));
                 var facetQueryFilter = new CachingWrapperFilter(new QueryWrapperFilter(facetQuery));
-                yield return new FacetValueTermFilter { Term = termReader.Term.Text, Filter = facetQueryFilter };
-            }
-            while (termReader.Next());
-
+                yield return new FacetValueTermFilter {Term = termReader.Term.Text, Filter = facetQueryFilter};
+            } while (termReader.Next());
         }
 
-        private IEnumerable<FacetMatch> GetAllFacetsValues(Query baseQueryWithoutFacetDrilldown, IEnumerable<string> facetAttributeFieldNames, List<SelectedFacet> selectedFacets)
+        private IEnumerable<FacetMatch> GetAllFacetsValues(Query baseQueryWithoutFacetDrilldown,
+            IEnumerable<string> facetAttributeFieldNames, List<SelectedFacet> selectedFacets)
         {
-            return facetAttributeFieldNames.SelectMany(facetAttributeFieldName => FindMatchesInQuery(baseQueryWithoutFacetDrilldown, selectedFacets, facetAttributeFieldName));
+            return
+                facetAttributeFieldNames.SelectMany(
+                    facetAttributeFieldName =>
+                        FindMatchesInQuery(baseQueryWithoutFacetDrilldown, selectedFacets, facetAttributeFieldName));
         }
 
         private IEnumerable<FacetMatch> FindMatchesInQuery(Query baseQueryWithoutFacetDrilldown, IEnumerable<SelectedFacet> selectedFacets, string facetAttributeFieldName)
         {
+            var queryFilter = new QueryWrapperFilter(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, selectedFacets, facetAttributeFieldName));
+            var bitsQueryWithoutFacetDrilldown = new OpenBitSetDISI(queryFilter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc);
+            var baseQueryWithoutFacetDrilldownCopy = new OpenBitSetDISI(bitsQueryWithoutFacetDrilldown.Bits.Length)
+            {
+                Bits = new long[bitsQueryWithoutFacetDrilldown.Bits.Length]
+            };
+
             var matches = GetOrCreateFacetBitSet(facetAttributeFieldName).FacetValueBitSetList.Select(value =>
             {
-                var queryFilter = new QueryWrapperFilter(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, selectedFacets, facetAttributeFieldName));
-                var bitsQuery = new OpenBitSetDISI(queryFilter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc);
-                bitsQuery.And(value.OpenBitSetDISI);
-                var count = bitsQuery.Cardinality();
+                bitsQueryWithoutFacetDrilldown.Bits.CopyTo(baseQueryWithoutFacetDrilldownCopy.Bits, 0);
+                baseQueryWithoutFacetDrilldownCopy.NumWords = bitsQueryWithoutFacetDrilldown.NumWords;
 
-                return new FacetMatch() { Count = count, Value = value.Value, FacetFieldName = facetAttributeFieldName };
+                baseQueryWithoutFacetDrilldownCopy.And(value.OpenBitSetDISI);
+                var count = baseQueryWithoutFacetDrilldownCopy.Cardinality();
+
+                return new FacetMatch() {Count = count, Value = value.Value, FacetFieldName = facetAttributeFieldName};
             }).ToList();
 
             return matches;
@@ -132,7 +120,7 @@ namespace MultiFacetLucene
         {
             var facetsToAdd = selectedFacets.Where(x => x.FieldName != facetAttributeFieldName).ToList();
             if (!facetsToAdd.Any()) return baseQueryWithoutFacetDrilldown;
-            var booleanQuery = new BooleanQuery { { baseQueryWithoutFacetDrilldown, Occur.MUST } };
+            var booleanQuery = new BooleanQuery {{baseQueryWithoutFacetDrilldown, Occur.MUST}};
             foreach (var selectedFacet in facetsToAdd)
             {
                 if (selectedFacet.SelectedValues.Count == 1)
@@ -150,6 +138,29 @@ namespace MultiFacetLucene
             return booleanQuery;
         }
 
+        private class FacetValueTermFilter
+        {
+            public string Term { get; set; }
+            public Filter Filter { get; set; }
+        }
 
+        private class FacetValues
+        {
+            public FacetValues()
+            {
+                FacetValueBitSetList = new List<FacetValueBitSet>();
+            }
+
+            public string Term { get; set; }
+
+            public List<FacetValueBitSet> FacetValueBitSetList { get; set; }
+
+            public class FacetValueBitSet
+            {
+                public string Value { get; set; }
+                public OpenBitSetDISI OpenBitSetDISI { get; set; }
+                public Filter Filter { get; set; }
+            }
+        }
     }
 }

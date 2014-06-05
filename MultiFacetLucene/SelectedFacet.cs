@@ -8,6 +8,7 @@ namespace MultiFacetLucene
         {
             SelectedValues = new List<string>();
         }
+
         public string FieldName { get; set; }
         public List<string> SelectedValues { get; set; }
     }

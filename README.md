@@ -3,9 +3,9 @@ MultiFacetLuceneNet
 
 Lucene.NET with simplified (and correct!) facet behaviour
 
-What is this? Well, to me correct facet behaviour is to exclude itself from calculation of facets. 
+What is this? Well, to me correct facet behaviour is for each facet "group" to exclude selections concerning itself from the calculation of facets. 
 
-Stolen from SOLR - here is what I mean
+Stolen from the documentation of SOLR - here is what I mean:
 
 To implement a multi-select facet for doctype, a GUI may want to still display the other doctype values and their associated counts, as if the doctype:pdf constraint had not yet been applied. Example:
 
@@ -93,3 +93,4 @@ Sample usage explains it best:
         }
 
 
+Some more background is available at http://www.stefanholmberg.com/post/2014/06/05/Lucenenet-and-multiple-facets

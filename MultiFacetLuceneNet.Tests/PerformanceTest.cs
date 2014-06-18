@@ -23,7 +23,12 @@ namespace MultiFacetLuceneNet.Tests
         public void Warmup()
         {
             //Warmup to prefetch facet bitset
-            _target.SearchWithFacets(new TermQuery(new Term("Price", "5")), 100, new List<SelectedFacet>(), new[] {"color", "type"});
+            var facetFieldInfos = new List<FacetFieldInfo>
+            {
+                new FacetFieldInfo{ FieldName = "color"},
+                new FacetFieldInfo{ FieldName = "type"},
+            };
+            _target.SearchWithFacets(new TermQuery(new Term("Price", "5")), 100, facetFieldInfos);
         }
 
         [TestInitialize]
@@ -40,7 +45,12 @@ namespace MultiFacetLuceneNet.Tests
             var stopwatch = new Stopwatch();
             stopwatch.Start();
 
-            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, new List<SelectedFacet>(), new[] {"color", "type"});
+            var facetFieldInfos = new List<FacetFieldInfo>
+            {
+                new FacetFieldInfo{ FieldName = "color"},
+                new FacetFieldInfo{ FieldName = "type"},
+            };
+            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, facetFieldInfos);
 
 
             stopwatch.Stop();
@@ -54,7 +64,7 @@ namespace MultiFacetLuceneNet.Tests
             var stopwatch = new Stopwatch();
             stopwatch.Start();
 
-            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, new List<SelectedFacet>(), Enumerable.Empty<string>());
+            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, new List<FacetFieldInfo>());
 
 
             stopwatch.Stop();

@@ -53,11 +53,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="FacetFieldInfo.cs" />
     <Compile Include="FacetSearcher.cs" />
     <Compile Include="FacetMatch.cs" />
     <Compile Include="FacetSearchResult.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SelectedFacet.cs" />
+    <Compile Include="ResultCollection.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

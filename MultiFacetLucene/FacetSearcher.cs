@@ -31,11 +31,11 @@ namespace MultiFacetLucene
         {
         }
 
-        public FacetSearchResult SearchWithFacets(Query baseQueryWithoutFacetDrilldown, int topResults, List<SelectedFacet> selectedFacets, IEnumerable<string> facetAttributeFieldNames)
+        public FacetSearchResult SearchWithFacets(Query baseQueryWithoutFacetDrilldown, int topResults, IList<FacetFieldInfo> facetFieldInfos)
         {
-            var hits = Search(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, selectedFacets, null), topResults);
+            var hits = Search(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, facetFieldInfos, null), topResults);
 
-            var facets = GetAllFacetsValues(baseQueryWithoutFacetDrilldown, facetAttributeFieldNames, selectedFacets)
+            var facets = GetAllFacetsValues(baseQueryWithoutFacetDrilldown, facetFieldInfos)
                 .Where(x => x.Count > 0)
                 .ToList();
             var va = facets.Where(x => x.Count > 1);
@@ -58,13 +58,18 @@ namespace MultiFacetLucene
             facetValues.Term = facetAttributeFieldName;
 
             facetValues.FacetValueBitSetList.AddRange(
-                GetFacetValueTerms(facetAttributeFieldName).Select(fvt => new FacetValues.FacetValueBitSet
+                GetFacetValueTerms(facetAttributeFieldName).Select(fvt =>
                 {
-                    Value = fvt.Term,
-                    Filter = fvt.Filter,
-                    OpenBitSetDISI =
-                        new OpenBitSetDISI(fvt.Filter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc)
-                }));
+                    var bitset = new OpenBitSetDISI(fvt.Filter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc);
+                    var value = new FacetValues.FacetValueBitSet
+                    {
+                        Value = fvt.Term,
+                        Filter = fvt.Filter,
+                        OpenBitSetDISI = bitset,
+                        Count = bitset.Cardinality(),
+                    };
+                    return value;
+                }).OrderByDescending(x => x.Count));
 
             return facetValues;
         }
@@ -84,53 +89,76 @@ namespace MultiFacetLucene
         }
 
         private IEnumerable<FacetMatch> GetAllFacetsValues(Query baseQueryWithoutFacetDrilldown,
-            IEnumerable<string> facetAttributeFieldNames, List<SelectedFacet> selectedFacets)
+            IList<FacetFieldInfo> facetFieldInfos)
         {
             return
-                facetAttributeFieldNames.SelectMany(
-                    facetAttributeFieldName =>
-                        FindMatchesInQuery(baseQueryWithoutFacetDrilldown, selectedFacets, facetAttributeFieldName));
+                facetFieldInfos.SelectMany(
+                    facetFieldInfo =>
+                        FindMatchesInQuery(baseQueryWithoutFacetDrilldown, facetFieldInfos, facetFieldInfo));
         }
 
-        private IEnumerable<FacetMatch> FindMatchesInQuery(Query baseQueryWithoutFacetDrilldown, IEnumerable<SelectedFacet> selectedFacets, string facetAttributeFieldName)
+        private IEnumerable<FacetMatch> FindMatchesInQuery(Query baseQueryWithoutFacetDrilldown, IList<FacetFieldInfo> allFacetFieldInfos, FacetFieldInfo facetFieldInfoToCalculateFor)
         {
-            var queryFilter = new QueryWrapperFilter(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, selectedFacets, facetAttributeFieldName));
+            var calculations = 0;
+
+            var queryFilter = new CachingWrapperFilter(new QueryWrapperFilter(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, allFacetFieldInfos, facetFieldInfoToCalculateFor.FieldName)));
             var bitsQueryWithoutFacetDrilldown = new OpenBitSetDISI(queryFilter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc);
             var baseQueryWithoutFacetDrilldownCopy = new OpenBitSetDISI(bitsQueryWithoutFacetDrilldown.Bits.Length)
             {
                 Bits = new long[bitsQueryWithoutFacetDrilldown.Bits.Length]
             };
 
-            var matches = GetOrCreateFacetBitSet(facetAttributeFieldName).FacetValueBitSetList.Select(value =>
+            var calculatedFacetCounts = new ResultCollection(facetFieldInfoToCalculateFor);
+            foreach (var facetValueBitSet in GetOrCreateFacetBitSet(facetFieldInfoToCalculateFor.FieldName).FacetValueBitSetList)
             {
+                var isSelected = calculatedFacetCounts.IsSelected(facetValueBitSet.Value);
+
+                if (!isSelected && facetValueBitSet.Count < calculatedFacetCounts.MinCountForNonSelected) //Impossible to get a better result
+                {
+                    if (calculatedFacetCounts.HaveEnoughResults)
+                        break;
+                }
+
                 bitsQueryWithoutFacetDrilldown.Bits.CopyTo(baseQueryWithoutFacetDrilldownCopy.Bits, 0);
                 baseQueryWithoutFacetDrilldownCopy.NumWords = bitsQueryWithoutFacetDrilldown.NumWords;
 
-                baseQueryWithoutFacetDrilldownCopy.And(value.OpenBitSetDISI);
+                baseQueryWithoutFacetDrilldownCopy.And(facetValueBitSet.OpenBitSetDISI);
                 var count = baseQueryWithoutFacetDrilldownCopy.Cardinality();
+                if (count == 0)
+                    continue;
+                var match = new FacetMatch
+                {
+                    Count = count, 
+                    Value = facetValueBitSet.Value, 
+                    FacetFieldName = facetFieldInfoToCalculateFor.FieldName
+                };
 
-                return new FacetMatch() {Count = count, Value = value.Value, FacetFieldName = facetAttributeFieldName};
-            }).ToList();
+                calculations++;
+                if (isSelected)
+                    calculatedFacetCounts.AddToSelected(match);
+                else
+                    calculatedFacetCounts.AddToNonSelected(match);
+            }
 
-            return matches;
+            return calculatedFacetCounts.GetList();
         }
 
 
-        protected Query CreateFacetedQuery(Query baseQueryWithoutFacetDrilldown, IEnumerable<SelectedFacet> selectedFacets, string facetAttributeFieldName)
+        protected Query CreateFacetedQuery(Query baseQueryWithoutFacetDrilldown, IList<FacetFieldInfo> facetFieldInfos, string facetAttributeFieldName)
         {
-            var facetsToAdd = selectedFacets.Where(x => x.FieldName != facetAttributeFieldName).ToList();
+            var facetsToAdd = facetFieldInfos.Where(x => x.FieldName != facetAttributeFieldName && x.Selections.Any()).ToList();
             if (!facetsToAdd.Any()) return baseQueryWithoutFacetDrilldown;
             var booleanQuery = new BooleanQuery {{baseQueryWithoutFacetDrilldown, Occur.MUST}};
-            foreach (var selectedFacet in facetsToAdd)
+            foreach (var facetFieldInfo in facetsToAdd)
             {
-                if (selectedFacet.SelectedValues.Count == 1)
-                    booleanQuery.Add(new TermQuery(new Term(selectedFacet.FieldName, selectedFacet.SelectedValues[0])), Occur.MUST);
+                if (facetFieldInfo.Selections.Count == 1)
+                    booleanQuery.Add(new TermQuery(new Term(facetFieldInfo.FieldName, facetFieldInfo.Selections[0])), Occur.MUST);
                 else
                 {
                     var valuesQuery = new BooleanQuery();
-                    foreach (var value in selectedFacet.SelectedValues)
+                    foreach (var value in facetFieldInfo.Selections)
                     {
-                        valuesQuery.Add(new TermQuery(new Term(selectedFacet.FieldName, value)), Occur.SHOULD);
+                        valuesQuery.Add(new TermQuery(new Term(facetFieldInfo.FieldName, value)), Occur.SHOULD);
                     }
                     booleanQuery.Add(valuesQuery, Occur.MUST);
                 }
@@ -160,6 +188,8 @@ namespace MultiFacetLucene
                 public string Value { get; set; }
                 public OpenBitSetDISI OpenBitSetDISI { get; set; }
                 public Filter Filter { get; set; }
+
+                public long Count { get; set; }
             }
         }
     }

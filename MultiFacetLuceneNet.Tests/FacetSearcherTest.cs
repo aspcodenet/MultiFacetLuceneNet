@@ -28,7 +28,14 @@ namespace MultiFacetLuceneNet.Tests
         [TestMethod]
         public void MatchAllQueryShouldReturnCorrectFacetsAndDocuments()
         {
-            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, new List<SelectedFacet>(), new[] { "color", "type" });
+            var facetFieldInfos = new List<FacetFieldInfo>
+            {
+                new FacetFieldInfo{ FieldName = "color"},
+                new FacetFieldInfo{ FieldName = "type"},
+            };
+
+
+            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, facetFieldInfos);
 
             var colorFacets = actual.Facets.Where(x => x.FacetFieldName == "color").ToList();
             var typeFacets = actual.Facets.Where(x => x.FacetFieldName == "type").ToList();
@@ -51,10 +58,13 @@ namespace MultiFacetLuceneNet.Tests
         [TestMethod]
         public void DrilldownSingleFacetSingleValueShouldReturnCorrectFacetsAndDocuments()
         {
-            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, new List<SelectedFacet>
+            var facetFieldInfos = new List<FacetFieldInfo>
             {
-                new SelectedFacet{ FieldName = "color", SelectedValues = new List<string>{"yellow"}}
-            }, new[] { "color", "type" });
+                new FacetFieldInfo{ FieldName = "color", Selections = new List<string>{"yellow"}},
+                new FacetFieldInfo{ FieldName = "type"},
+            };
+
+            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, facetFieldInfos);
 
             var colorFacets = actual.Facets.Where(x => x.FacetFieldName == "color").ToList();
             var typeFacets = actual.Facets.Where(x => x.FacetFieldName == "type").ToList();
@@ -76,10 +86,13 @@ namespace MultiFacetLuceneNet.Tests
         [TestMethod]
         public void DrilldownSingleFacetMultiValueShouldReturnCorrectFacetsAndDocuments()
         {
-            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, new List<SelectedFacet>
+            var facetFieldInfos = new List<FacetFieldInfo>
             {
-                new SelectedFacet{ FieldName = "color", SelectedValues = new List<string>{"yellow", "none"}}
-            }, new[] { "color", "type" });
+                new FacetFieldInfo{ FieldName = "color", Selections = new List<string>{"yellow", "none"}},
+                new FacetFieldInfo{ FieldName = "type"},
+            };
+
+            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, facetFieldInfos);
 
             var colorFacets = actual.Facets.Where(x => x.FacetFieldName == "color").ToList();
             var typeFacets = actual.Facets.Where(x => x.FacetFieldName == "type").ToList();
@@ -99,6 +112,66 @@ namespace MultiFacetLuceneNet.Tests
             Assert.AreEqual(1, typeFacets.Single(x => x.Value == "drink").Count);
         }
 
+        [TestMethod]
+        public void MaxFacetRestrictionShouldReturnCorrectFacetsAndDocuments()
+        {
+            var facetFieldInfos = new List<FacetFieldInfo>
+            {
+                new FacetFieldInfo{ FieldName = "color", MaxToFetchExcludingSelections = 1},
+            };
+
+            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, facetFieldInfos);
+
+            var colorFacets = actual.Facets.Where(x => x.FacetFieldName == "color").ToList();
+
+            Assert.AreEqual(5, actual.Hits.TotalHits);
+            Assert.AreEqual(1, colorFacets.Count);
+            Assert.AreEqual(3, colorFacets.Single(x => x.Value == "yellow").Count);
+        }
+
+        [TestMethod]
+        public void MaxFacetRestrictionShouldStillReturnSelectedFacet()
+        {
+            var facetFieldInfos = new List<FacetFieldInfo>
+            {
+                new FacetFieldInfo{ FieldName = "color", Selections = new List<string>{"none"}, MaxToFetchExcludingSelections = 1},
+            };
+
+            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, facetFieldInfos);
+
+            var colorFacets = actual.Facets.Where(x => x.FacetFieldName == "color").ToList();
+
+            Assert.AreEqual(2, colorFacets.Count);
+            Assert.AreEqual(3, colorFacets.Single(x => x.Value == "yellow").Count);
+            Assert.AreEqual(1, colorFacets.Single(x => x.Value == "none").Count);
+        }
+
+
+        public void MaxFacetRestrictionShouldReturnSelectedFacetAsWell()
+        {
+            var facetFieldInfos = new List<FacetFieldInfo>
+            {
+                new FacetFieldInfo{ FieldName = "color", Selections = new List<string>{"yellow", "none"}},
+                new FacetFieldInfo{ FieldName = "type", MaxToFetchExcludingSelections = 2},
+            };
+
+            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, facetFieldInfos);
+
+            var colorFacets = actual.Facets.Where(x => x.FacetFieldName == "color").ToList();
+            var typeFacets = actual.Facets.Where(x => x.FacetFieldName == "type").ToList();
+
+            Assert.AreEqual(4, actual.Hits.TotalHits);
+
+            Assert.AreEqual(3, colorFacets.Count);
+            Assert.AreEqual(2, typeFacets.Count);
+
+            Assert.AreEqual(3, colorFacets.Single(x => x.Value == "yellow").Count);
+            Assert.AreEqual(1, colorFacets.Single(x => x.Value == "white").Count);
+            Assert.AreEqual(1, colorFacets.Single(x => x.Value == "none").Count);
+
+            Assert.AreEqual(3, typeFacets.Single(x => x.Value == "food").Count);
+            Assert.AreEqual(2, typeFacets.Single(x => x.Value == "fruit").Count);
+        }
 
 
         [TestMethod]
@@ -106,7 +179,12 @@ namespace MultiFacetLuceneNet.Tests
         {
             var query = new QueryParser(Lucene.Net.Util.Version.LUCENE_30, string.Empty, new KeywordAnalyzer()).Parse("keywords:apa");
 
-            var actual = _target.SearchWithFacets(query, 100, new List<SelectedFacet>(), new[] {"color", "type"});
+            var facetFieldInfos = new List<FacetFieldInfo>
+            {
+                new FacetFieldInfo{ FieldName = "color"},
+                new FacetFieldInfo{ FieldName = "type"},
+            };
+            var actual = _target.SearchWithFacets(query, 100, facetFieldInfos);
 
             var colorFacets = actual.Facets.Where(x => x.FacetFieldName == "color").ToList();
             var typeFacets = actual.Facets.Where(x => x.FacetFieldName == "type").ToList();
@@ -129,11 +207,13 @@ namespace MultiFacetLuceneNet.Tests
         [TestMethod]
         public void DrilldownMultiFacetsShouldReturnCorrectFacetsAndDocuments()
         {
-            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, new List<SelectedFacet>
+            var facetFieldInfos = new List<FacetFieldInfo>
             {
-                new SelectedFacet{ FieldName = "color", SelectedValues = new List<string>{"yellow"}},
-                new SelectedFacet{ FieldName = "type", SelectedValues = new List<string>{"fruit"}}
-            }, new[] { "color", "type" });
+                new FacetFieldInfo{ FieldName = "color", Selections = new List<string>{"yellow"}},
+                new FacetFieldInfo{ FieldName = "type", Selections = new List<string>{"fruit"}},
+            };
+
+            var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, facetFieldInfos);
 
             var colorFacets = actual.Facets.Where(x => x.FacetFieldName == "color").ToList();
             var typeFacets = actual.Facets.Where(x => x.FacetFieldName == "type").ToList();

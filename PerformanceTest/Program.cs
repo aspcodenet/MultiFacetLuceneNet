@@ -7,9 +7,11 @@ using System.Threading.Tasks;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
+using Lucene.Net.QueryParsers;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using MultiFacetLucene;
+using Version = Lucene.Net.Util.Version;
 
 namespace PerformanceTest
 {
@@ -22,27 +24,38 @@ namespace PerformanceTest
             _target = new FacetSearcher(SetupIndex());
             Warmup();
 
+            var facetFieldInfos = new List<FacetFieldInfo>
+                    {
+                        new FacetFieldInfo{ FieldName = "color", MaxToFetchExcludingSelections   = 20},
+                        new FacetFieldInfo{ FieldName = "type", MaxToFetchExcludingSelections   = 20},
+                    };
+
             var stopwatchAll = new Stopwatch();
             stopwatchAll.Start();
             for (int i = 0; i < 100; i++)
             {
                 var stopwatch = new Stopwatch();
                 stopwatch.Start();
-                var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, new List<SelectedFacet>(), new[] { "color", "type" });
+                var actual = _target.SearchWithFacets(new MatchAllDocsQuery(), 100, facetFieldInfos);
                 stopwatch.Stop();
                 var vs = stopwatch.ElapsedMilliseconds;
                 Console.WriteLine("Took " + vs + " ms");
             }
             stopwatchAll.Stop();
             var vs2 = stopwatchAll.ElapsedMilliseconds;
-            Console.WriteLine("Took " + vs2 + " ms - i.e " + vs2/100 + "ms/query");
-
+            Console.WriteLine("Took " + vs2 + " ms - i.e " + vs2 / 100 + "ms/query");
         }
 
         public static void Warmup()
         {
+            var facetFieldInfos = new List<FacetFieldInfo>
+                    {
+                        new FacetFieldInfo{ FieldName = "color", MaxToFetchExcludingSelections   = 20},
+                        new FacetFieldInfo{ FieldName = "type", MaxToFetchExcludingSelections   = 20},
+                    };
+
             //Warmup to prefetch facet bitset
-            _target.SearchWithFacets(new TermQuery(new Term("Price", "5")), 100, new List<SelectedFacet>(), new[] { "color", "type" });
+            _target.SearchWithFacets(new TermQuery(new Term("Price", "5")), 100, facetFieldInfos);
         }
 
 
@@ -64,6 +77,56 @@ namespace PerformanceTest
             writer.Commit();
             return IndexReader.Open(directory, true);
         }
+
+        /*        protected static IndexReader SetupIndexPhysicalTest()
+                {
+                    var directory = @"D:\Code\sites\SearchSite\SearchSiteWeb\App_Data\Index\Wordpress";
+                    var index = FSDirectory.Open(directory);
+                    return IndexReader.Open(index, true);
+                }
+                 static void Main(string[] args)
+                {
+                    _target = new FacetSearcher(SetupIndexPhysicalTest());
+
+                    var stopwatchAll = new Stopwatch();
+                    stopwatchAll.Start();
+
+                    var queryParser = new MultiFieldQueryParser(Version.LUCENE_30,
+                        new[] { "title", "bodies" },
+                        new StandardAnalyzer(Version.LUCENE_30)
+                        );
+
+                    var facetFieldInfos = new List<FacetFieldInfo>
+                    {
+                        new FacetFieldInfo{ FieldName = "userdisplayname",Selections = new List<string>{"Daniel", "Joshua"}, MaxToFetchExcludingSelections   = 20},
+                        new FacetFieldInfo{ FieldName = "tag", MaxToFetchExcludingSelections   = 20},
+                    };
+
+                    for (int i = 0; i < 100; i++)
+                    {
+                        var stopwatch = new Stopwatch();
+                        stopwatch.Start();
+                        var query = queryParser.Parse("mysql");
+                        var actual = _target.SearchWithFacets(query, 100, facetFieldInfos);
+                        stopwatch.Stop();
+
+                        foreach (var groupy in actual.Facets.Select(x => x.FacetFieldName).Distinct())
+                        {
+                            string @group = groupy;
+                            System.IO.File.WriteAllLines(@"d:\\temp2\\" + group + ".txt",actual.Facets.Where(x=>x.FacetFieldName == group).Select(x=>x.Value + ":" + x.Count));
+                        }
+                        var vs = stopwatch.ElapsedMilliseconds;
+                        Console.WriteLine("Took " + vs + " ms");
+                    }
+                    stopwatchAll.Stop();
+                    var vs2 = stopwatchAll.ElapsedMilliseconds;
+                    Console.WriteLine("Took " + vs2 + " ms - i.e " + vs2/100 + "ms/query");
+
+                }
+
+
+         */
+
 
 
         private static string GenerateFruit()

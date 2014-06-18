@@ -101,3 +101,7 @@ DEMO SITE
 http://aviationquestions.aircraftdata.net/search/aviation
 
 Here you get right into the search for  "aviation". See to the right, User and Tags are facet values. Now, when clicking  one of the users, search result is indeed filtered  - but as you can see you can still select more users. I.e possible to multi value facetting!
+
+NUGET
+=====
+https://www.nuget.org/packages/MultiFacetLucene.Net

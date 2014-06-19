@@ -19,7 +19,7 @@ namespace PerformanceTest
     {
         private static FacetSearcher _target;
 
-        static void Main(string[] args)
+        static void Maina(string[] args)
         {
             _target = new FacetSearcher(SetupIndex());
             Warmup();
@@ -78,7 +78,7 @@ namespace PerformanceTest
             return IndexReader.Open(directory, true);
         }
 
-        /*        protected static IndexReader SetupIndexPhysicalTest()
+                protected static IndexReader SetupIndexPhysicalTest()
                 {
                     var directory = @"D:\Code\sites\SearchSite\SearchSiteWeb\App_Data\Index\Wordpress";
                     var index = FSDirectory.Open(directory);
@@ -98,7 +98,7 @@ namespace PerformanceTest
 
                     var facetFieldInfos = new List<FacetFieldInfo>
                     {
-                        new FacetFieldInfo{ FieldName = "userdisplayname",Selections = new List<string>{"Daniel", "Joshua"}, MaxToFetchExcludingSelections   = 20},
+                        new FacetFieldInfo{ FieldName = "userdisplayname",MaxToFetchExcludingSelections   = 20},
                         new FacetFieldInfo{ FieldName = "tag", MaxToFetchExcludingSelections   = 20},
                     };
 
@@ -125,7 +125,6 @@ namespace PerformanceTest
                 }
 
 
-         */
 
 
 

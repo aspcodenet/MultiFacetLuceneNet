@@ -86,6 +86,7 @@ namespace PerformanceTest
                 }
                  static void Main(string[] args)
                 {
+                    long originalByteCount = GC.GetTotalMemory(true);
                     _target = new FacetSearcher(SetupIndexPhysicalTest());
 
                     var stopwatchAll = new Stopwatch();
@@ -121,6 +122,11 @@ namespace PerformanceTest
                     stopwatchAll.Stop();
                     var vs2 = stopwatchAll.ElapsedMilliseconds;
                     Console.WriteLine("Took " + vs2 + " ms - i.e " + vs2/100 + "ms/query");
+
+                    long finalByteCount = GC.GetTotalMemory(true);
+
+                    Console.WriteLine("START: " + originalByteCount + " END:" + finalByteCount);
+                    Console.WriteLine("DIFF: " + (finalByteCount - originalByteCount));
 
                 }
 

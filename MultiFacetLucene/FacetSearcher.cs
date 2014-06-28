@@ -38,7 +38,6 @@ namespace MultiFacetLucene
             var facets = GetAllFacetsValues(baseQueryWithoutFacetDrilldown, facetFieldInfos)
                 .Where(x => x.Count > 0)
                 .ToList();
-            var va = facets.Where(x => x.Count > 1);
             return new FacetSearchResult()
             {
                 Facets = facets,
@@ -60,13 +59,11 @@ namespace MultiFacetLucene
             facetValues.FacetValueBitSetList.AddRange(
                 GetFacetValueTerms(facetAttributeFieldName).Select(fvt =>
                 {
-                    var bitset = new OpenBitSetDISI(fvt.Filter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc);
                     var value = new FacetValues.FacetValueBitSet
                     {
                         Value = fvt.Term,
-                        Filter = fvt.Filter,
-                        OpenBitSetDISI = bitset,
-                        Count = bitset.Cardinality(),
+                        Bitset = fvt.Bitset,
+                        Count = fvt.Bitset.Cardinality(),
                     };
                     return value;
                 }).OrderByDescending(x => x.Count));
@@ -74,18 +71,22 @@ namespace MultiFacetLucene
             return facetValues;
         }
 
-        private IEnumerable<FacetValueTermFilter> GetFacetValueTerms(string facetAttributeFieldName)
+        private IEnumerable<FacetValueTermBitset> GetFacetValueTerms(string facetAttributeFieldName)
         {
-            var termReader = IndexReader.Terms(new Term(facetAttributeFieldName, String.Empty));
-            do
+            using(var termReader = IndexReader.Terms(new Term(facetAttributeFieldName, String.Empty)))
             {
-                if (termReader.Term.Field != facetAttributeFieldName)
-                    yield break;
+                do
+                {
+                    if (termReader.Term.Field != facetAttributeFieldName)
+                        yield break;
 
-                var facetQuery = new TermQuery(termReader.Term.CreateTerm(termReader.Term.Text));
-                var facetQueryFilter = new CachingWrapperFilter(new QueryWrapperFilter(facetQuery));
-                yield return new FacetValueTermFilter {Term = termReader.Term.Text, Filter = facetQueryFilter};
-            } while (termReader.Next());
+                    var facetQuery = new TermQuery(termReader.Term.CreateTerm(termReader.Term.Text));
+                    var facetQueryFilter = new QueryWrapperFilter(facetQuery);
+                    var bitset = new OpenBitSetDISI(facetQueryFilter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc);
+
+                    yield return new FacetValueTermBitset { Term = termReader.Term.Text, Bitset = bitset };
+                } while (termReader.Next());
+            }
         }
 
         private IEnumerable<FacetMatch> GetAllFacetsValues(Query baseQueryWithoutFacetDrilldown,
@@ -122,7 +123,7 @@ namespace MultiFacetLucene
                 bitsQueryWithoutFacetDrilldown.Bits.CopyTo(baseQueryWithoutFacetDrilldownCopy.Bits, 0);
                 baseQueryWithoutFacetDrilldownCopy.NumWords = bitsQueryWithoutFacetDrilldown.NumWords;
 
-                baseQueryWithoutFacetDrilldownCopy.And(facetValueBitSet.OpenBitSetDISI);
+                baseQueryWithoutFacetDrilldownCopy.And(facetValueBitSet.Bitset);
                 var count = baseQueryWithoutFacetDrilldownCopy.Cardinality();
                 if (count == 0)
                     continue;
@@ -166,10 +167,10 @@ namespace MultiFacetLucene
             return booleanQuery;
         }
 
-        private class FacetValueTermFilter
+        private class FacetValueTermBitset
         {
             public string Term { get; set; }
-            public Filter Filter { get; set; }
+            public OpenBitSetDISI Bitset { get; set; }
         }
 
         private class FacetValues
@@ -186,9 +187,7 @@ namespace MultiFacetLucene
             public class FacetValueBitSet
             {
                 public string Value { get; set; }
-                public OpenBitSetDISI OpenBitSetDISI { get; set; }
-                public Filter Filter { get; set; }
-
+                public OpenBitSetDISI Bitset { get; set; }
                 public long Count { get; set; }
             }
         }

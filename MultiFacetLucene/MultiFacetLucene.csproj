@@ -57,6 +57,9 @@
     <Compile Include="FacetSearcher.cs" />
     <Compile Include="FacetMatch.cs" />
     <Compile Include="FacetSearchResult.cs" />
+    <Compile Include="MemoryOptimizer\DefaultMemoryOptimizer.cs" />
+    <Compile Include="MemoryOptimizer\IMemoryOptimizer.cs" />
+    <Compile Include="MemoryOptimizer\NoMemoryOptimizer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ResultCollection.cs" />
   </ItemGroup>

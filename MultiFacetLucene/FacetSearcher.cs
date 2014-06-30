@@ -6,30 +6,40 @@ using Lucene.Net.Index;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
+using MultiFacetLucene.MemoryOptimizer;
 
 namespace MultiFacetLucene
 {
     public class FacetSearcher : IndexSearcher
     {
         private readonly ConcurrentDictionary<string, FacetValues> _facetBitSetDictionary = new ConcurrentDictionary<string, FacetValues>();
+        public IMemoryOptimizer MemoryOptimizer { get; protected set; }
 
-        public FacetSearcher(Directory path)
+        public FacetSearcher(Directory path, IMemoryOptimizer memoryOptimizer = null)
             : base(path)
         {
+            MemoryOptimizer = memoryOptimizer;
         }
 
-        public FacetSearcher(Directory path, bool readOnly) : base(path, readOnly)
+        public FacetSearcher(Directory path, bool readOnly, IMemoryOptimizer memoryOptimizer = null)
+            : base(path, readOnly)
         {
+            MemoryOptimizer = memoryOptimizer;
         }
 
-        public FacetSearcher(IndexReader r) : base(r)
+        public FacetSearcher(IndexReader r, IMemoryOptimizer memoryOptimizer = null)
+            : base(r)
         {
+            MemoryOptimizer = memoryOptimizer;
         }
 
-        public FacetSearcher(IndexReader reader, IndexReader[] subReaders, int[] docStarts)
+        public FacetSearcher(IndexReader reader, IndexReader[] subReaders, int[] docStarts, IMemoryOptimizer memoryOptimizer = null)
             : base(reader, subReaders, docStarts)
         {
+            MemoryOptimizer = memoryOptimizer;
         }
+
+
 
         public FacetSearchResult SearchWithFacets(Query baseQueryWithoutFacetDrilldown, int topResults, IList<FacetFieldInfo> facetFieldInfos)
         {
@@ -51,42 +61,40 @@ namespace MultiFacetLucene
             return _facetBitSetDictionary.GetOrAdd(facetAttributeFieldName, ReadBitSetsForValues);
         }
 
+
         private FacetValues ReadBitSetsForValues(string facetAttributeFieldName)
         {
-            var facetValues = new FacetValues();
-            facetValues.Term = facetAttributeFieldName;
+            var facetValues = new FacetValues {Term = facetAttributeFieldName};
 
-            facetValues.FacetValueBitSetList.AddRange(
-                GetFacetValueTerms(facetAttributeFieldName).Select(fvt =>
-                {
-                    var value = new FacetValues.FacetValueBitSet
-                    {
-                        Value = fvt.Term,
-                        Bitset = fvt.Bitset,
-                        Count = fvt.Bitset.Cardinality(),
-                    };
-                    return value;
-                }).OrderByDescending(x => x.Count));
+            facetValues.FacetValueBitSetList.AddRange(GetFacetValueTerms(facetAttributeFieldName).OrderByDescending(x => x.Count));
+
+            if (MemoryOptimizer == null) return facetValues;
+            foreach (var facetValue in MemoryOptimizer.SetAsLazyLoad(_facetBitSetDictionary.Values.ToList()))
+                facetValue.Bitset = null;
 
             return facetValues;
         }
 
-        private IEnumerable<FacetValueTermBitset> GetFacetValueTerms(string facetAttributeFieldName)
+        private IEnumerable<FacetValues.FacetValueBitSet> GetFacetValueTerms(string facetAttributeFieldName)
         {
-            using(var termReader = IndexReader.Terms(new Term(facetAttributeFieldName, String.Empty)))
+            using (var termReader = IndexReader.Terms(new Term(facetAttributeFieldName, String.Empty)))
             {
                 do
                 {
                     if (termReader.Term.Field != facetAttributeFieldName)
                         yield break;
 
-                    var facetQuery = new TermQuery(termReader.Term.CreateTerm(termReader.Term.Text));
-                    var facetQueryFilter = new QueryWrapperFilter(facetQuery);
-                    var bitset = new OpenBitSetDISI(facetQueryFilter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc);
-
-                    yield return new FacetValueTermBitset { Term = termReader.Term.Text, Bitset = bitset };
+                    var bitset = CalculateOpenBitSetDisi(facetAttributeFieldName, termReader.Term.Text);
+                    yield return new FacetValues.FacetValueBitSet {Value = termReader.Term.Text, Bitset = bitset, Count = bitset.Cardinality()};
                 } while (termReader.Next());
             }
+        }
+
+        protected OpenBitSetDISI CalculateOpenBitSetDisi(string facetAttributeFieldName, string value)
+        {
+            var facetQuery = new TermQuery(new Term(facetAttributeFieldName, value));
+            var facetQueryFilter = new QueryWrapperFilter(facetQuery);
+            return new OpenBitSetDISI(facetQueryFilter.GetDocIdSet(IndexReader).Iterator(), IndexReader.MaxDoc);
         }
 
         private IEnumerable<FacetMatch> GetAllFacetsValues(Query baseQueryWithoutFacetDrilldown,
@@ -123,14 +131,15 @@ namespace MultiFacetLucene
                 bitsQueryWithoutFacetDrilldown.Bits.CopyTo(baseQueryWithoutFacetDrilldownCopy.Bits, 0);
                 baseQueryWithoutFacetDrilldownCopy.NumWords = bitsQueryWithoutFacetDrilldown.NumWords;
 
-                baseQueryWithoutFacetDrilldownCopy.And(facetValueBitSet.Bitset);
+                var bitset = facetValueBitSet.Bitset ?? CalculateOpenBitSetDisi(facetFieldInfoToCalculateFor.FieldName, facetValueBitSet.Value);
+                baseQueryWithoutFacetDrilldownCopy.And(bitset);
                 var count = baseQueryWithoutFacetDrilldownCopy.Cardinality();
                 if (count == 0)
                     continue;
                 var match = new FacetMatch
                 {
-                    Count = count, 
-                    Value = facetValueBitSet.Value, 
+                    Count = count,
+                    Value = facetValueBitSet.Value,
                     FacetFieldName = facetFieldInfoToCalculateFor.FieldName
                 };
 
@@ -167,13 +176,7 @@ namespace MultiFacetLucene
             return booleanQuery;
         }
 
-        private class FacetValueTermBitset
-        {
-            public string Term { get; set; }
-            public OpenBitSetDISI Bitset { get; set; }
-        }
-
-        private class FacetValues
+        public class FacetValues
         {
             public FacetValues()
             {

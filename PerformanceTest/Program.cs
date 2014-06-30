@@ -11,6 +11,7 @@ using Lucene.Net.QueryParsers;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using MultiFacetLucene;
+using MultiFacetLucene.MemoryOptimizer;
 using Version = Lucene.Net.Util.Version;
 
 namespace PerformanceTest
@@ -87,7 +88,7 @@ namespace PerformanceTest
                  static void Main(string[] args)
                 {
                     long originalByteCount = GC.GetTotalMemory(true);
-                    _target = new FacetSearcher(SetupIndexPhysicalTest());
+                    _target = new FacetSearcher(SetupIndexPhysicalTest(), new DefaultMemoryOptimizer(20,10000));
 
                     var stopwatchAll = new Stopwatch();
                     stopwatchAll.Start();
@@ -123,6 +124,8 @@ namespace PerformanceTest
                     var vs2 = stopwatchAll.ElapsedMilliseconds;
                     Console.WriteLine("Took " + vs2 + " ms - i.e " + vs2/100 + "ms/query");
 
+                     GC.Collect();
+                     GC.WaitForPendingFinalizers();
                     long finalByteCount = GC.GetTotalMemory(true);
 
                     Console.WriteLine("START: " + originalByteCount + " END:" + finalByteCount);

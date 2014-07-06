@@ -6,39 +6,44 @@ using Lucene.Net.Index;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
-using MultiFacetLucene.MemoryOptimizer;
+using MultiFacetLucene.Configuration;
 
 namespace MultiFacetLucene
 {
     public class FacetSearcher : IndexSearcher
     {
         private readonly ConcurrentDictionary<string, FacetValues> _facetBitSetDictionary = new ConcurrentDictionary<string, FacetValues>();
-        public IMemoryOptimizer MemoryOptimizer { get; protected set; }
 
-        public FacetSearcher(Directory path, IMemoryOptimizer memoryOptimizer = null)
+        public FacetSearcher(Directory path, FacetSearcherConfiguration facetSearcherConfiguration = null)
             : base(path)
         {
-            MemoryOptimizer = memoryOptimizer;
+            Initialize(facetSearcherConfiguration);
         }
 
-        public FacetSearcher(Directory path, bool readOnly, IMemoryOptimizer memoryOptimizer = null)
+        public FacetSearcher(Directory path, bool readOnly, FacetSearcherConfiguration facetSearcherConfiguration = null)
             : base(path, readOnly)
         {
-            MemoryOptimizer = memoryOptimizer;
+            Initialize(facetSearcherConfiguration);
         }
 
-        public FacetSearcher(IndexReader r, IMemoryOptimizer memoryOptimizer = null)
+        public FacetSearcher(IndexReader r, FacetSearcherConfiguration facetSearcherConfiguration = null)
             : base(r)
         {
-            MemoryOptimizer = memoryOptimizer;
+            Initialize(facetSearcherConfiguration);
         }
 
-        public FacetSearcher(IndexReader reader, IndexReader[] subReaders, int[] docStarts, IMemoryOptimizer memoryOptimizer = null)
+        public FacetSearcher(IndexReader reader, IndexReader[] subReaders, int[] docStarts, FacetSearcherConfiguration facetSearcherConfiguration = null)
             : base(reader, subReaders, docStarts)
         {
-            MemoryOptimizer = memoryOptimizer;
+            Initialize(facetSearcherConfiguration);
         }
 
+        public FacetSearcherConfiguration FacetSearcherConfiguration { get; protected set; }
+
+        private void Initialize(FacetSearcherConfiguration facetSearcherConfiguration)
+        {
+            FacetSearcherConfiguration = facetSearcherConfiguration ?? FacetSearcherConfiguration.Default();
+        }
 
 
         public FacetSearchResult SearchWithFacets(Query baseQueryWithoutFacetDrilldown, int topResults, IList<FacetFieldInfo> facetFieldInfos)
@@ -68,8 +73,8 @@ namespace MultiFacetLucene
 
             facetValues.FacetValueBitSetList.AddRange(GetFacetValueTerms(facetAttributeFieldName).OrderByDescending(x => x.Count));
 
-            if (MemoryOptimizer == null) return facetValues;
-            foreach (var facetValue in MemoryOptimizer.SetAsLazyLoad(_facetBitSetDictionary.Values.ToList()))
+            if (FacetSearcherConfiguration.MemoryOptimizer == null) return facetValues;
+            foreach (var facetValue in FacetSearcherConfiguration.MemoryOptimizer.SetAsLazyLoad(_facetBitSetDictionary.Values.ToList()))
                 facetValue.Bitset = null;
 
             return facetValues;
@@ -85,7 +90,13 @@ namespace MultiFacetLucene
                         yield break;
 
                     var bitset = CalculateOpenBitSetDisi(facetAttributeFieldName, termReader.Term.Text);
-                    yield return new FacetValues.FacetValueBitSet {Value = termReader.Term.Text, Bitset = bitset, Count = bitset.Cardinality()};
+                    var cnt = bitset.Cardinality();
+                    if (cnt >= FacetSearcherConfiguration.MinimumCountInTotalDatasetForFacet)
+                        yield return new FacetValues.FacetValueBitSet {Value = termReader.Term.Text, Bitset = bitset, Count = cnt};
+                    else
+                    {
+                        bitset = null;
+                    }
                 } while (termReader.Next());
             }
         }

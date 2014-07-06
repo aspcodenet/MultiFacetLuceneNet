@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
@@ -11,29 +10,31 @@ using Lucene.Net.QueryParsers;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using MultiFacetLucene;
-using MultiFacetLucene.MemoryOptimizer;
+using MultiFacetLucene.Configuration;
+using MultiFacetLucene.Configuration.MemoryOptimizer;
 using Version = Lucene.Net.Util.Version;
 
 namespace PerformanceTest
 {
-    class Program
+    internal class Program
     {
         private static FacetSearcher _target;
+        private static readonly Random _rnd = new Random(Guid.NewGuid().GetHashCode());
 
-        static void Maina(string[] args)
+        private static void Maina(string[] args)
         {
             _target = new FacetSearcher(SetupIndex());
             Warmup();
 
             var facetFieldInfos = new List<FacetFieldInfo>
-                    {
-                        new FacetFieldInfo{ FieldName = "color", MaxToFetchExcludingSelections   = 20},
-                        new FacetFieldInfo{ FieldName = "type", MaxToFetchExcludingSelections   = 20},
-                    };
+            {
+                new FacetFieldInfo {FieldName = "color", MaxToFetchExcludingSelections = 20},
+                new FacetFieldInfo {FieldName = "type", MaxToFetchExcludingSelections = 20},
+            };
 
             var stopwatchAll = new Stopwatch();
             stopwatchAll.Start();
-            for (int i = 0; i < 100; i++)
+            for (var i = 0; i < 100; i++)
             {
                 var stopwatch = new Stopwatch();
                 stopwatch.Start();
@@ -44,29 +45,28 @@ namespace PerformanceTest
             }
             stopwatchAll.Stop();
             var vs2 = stopwatchAll.ElapsedMilliseconds;
-            Console.WriteLine("Took " + vs2 + " ms - i.e " + vs2 / 100 + "ms/query");
+            Console.WriteLine("Took " + vs2 + " ms - i.e " + vs2/100 + "ms/query");
         }
 
         public static void Warmup()
         {
             var facetFieldInfos = new List<FacetFieldInfo>
-                    {
-                        new FacetFieldInfo{ FieldName = "color", MaxToFetchExcludingSelections   = 20},
-                        new FacetFieldInfo{ FieldName = "type", MaxToFetchExcludingSelections   = 20},
-                    };
+            {
+                new FacetFieldInfo {FieldName = "color", MaxToFetchExcludingSelections = 20},
+                new FacetFieldInfo {FieldName = "type", MaxToFetchExcludingSelections = 20},
+            };
 
             //Warmup to prefetch facet bitset
             _target.SearchWithFacets(new TermQuery(new Term("Price", "5")), 100, facetFieldInfos);
         }
 
 
-
         protected static IndexReader SetupIndex()
         {
             var directory = new RAMDirectory();
-            var writer = new IndexWriter(directory, new StandardAnalyzer(Lucene.Net.Util.Version.LUCENE_30), true,
+            var writer = new IndexWriter(directory, new StandardAnalyzer(Version.LUCENE_30), true,
                 IndexWriter.MaxFieldLength.LIMITED);
-            for (int i = 0; i < 50000; i++)
+            for (var i = 0; i < 50000; i++)
                 writer.AddDocument(new Document()
                     .AddField("title", Guid.NewGuid().ToString(), Field.Store.YES, Field.Index.NOT_ANALYZED)
                     .AddField("color", GenerateColor(), Field.Store.YES, Field.Index.NOT_ANALYZED)
@@ -79,62 +79,59 @@ namespace PerformanceTest
             return IndexReader.Open(directory, true);
         }
 
-                protected static IndexReader SetupIndexPhysicalTest()
+        protected static IndexReader SetupIndexPhysicalTest()
+        {
+            var directory = @"D:\Code\sites\SearchSite\SearchSiteWeb\App_Data\Index\Wordpress";
+            var index = FSDirectory.Open(directory);
+            return IndexReader.Open(index, true);
+        }
+
+        private static void Main(string[] args)
+        {
+            var originalByteCount = GC.GetTotalMemory(true);
+            _target = new FacetSearcher(SetupIndexPhysicalTest(), new FacetSearcherConfiguration {MemoryOptimizer = new DefaultMemoryOptimizer(20, 5000), MinimumCountInTotalDatasetForFacet = 1});
+
+            var stopwatchAll = new Stopwatch();
+            stopwatchAll.Start();
+
+            var queryParser = new MultiFieldQueryParser(Version.LUCENE_30,
+                new[] {"title", "bodies"},
+                new StandardAnalyzer(Version.LUCENE_30)
+                );
+
+            var facetFieldInfos = new List<FacetFieldInfo>
+            {
+                new FacetFieldInfo {FieldName = "userdisplayname", MaxToFetchExcludingSelections = 20},
+                new FacetFieldInfo {FieldName = "tag", MaxToFetchExcludingSelections = 20},
+            };
+
+            for (var i = 0; i < 100; i++)
+            {
+                var stopwatch = new Stopwatch();
+                stopwatch.Start();
+                var query = queryParser.Parse("mysql");
+                var actual = _target.SearchWithFacets(query, 100, facetFieldInfos);
+                stopwatch.Stop();
+
+                foreach (var groupy in actual.Facets.Select(x => x.FacetFieldName).Distinct())
                 {
-                    var directory = @"D:\Code\sites\SearchSite\SearchSiteWeb\App_Data\Index\Wordpress";
-                    var index = FSDirectory.Open(directory);
-                    return IndexReader.Open(index, true);
+                    var @group = groupy;
+                    File.WriteAllLines(@"d:\\temp2\\" + group + ".txt", actual.Facets.Where(x => x.FacetFieldName == group).Select(x => x.Value + ":" + x.Count));
                 }
-                 static void Main(string[] args)
-                {
-                    long originalByteCount = GC.GetTotalMemory(true);
-                    _target = new FacetSearcher(SetupIndexPhysicalTest(), new DefaultMemoryOptimizer(20,10000));
+                var vs = stopwatch.ElapsedMilliseconds;
+                Console.WriteLine("Took " + vs + " ms");
+            }
+            stopwatchAll.Stop();
+            var vs2 = stopwatchAll.ElapsedMilliseconds;
+            Console.WriteLine("Took " + vs2 + " ms - i.e " + vs2/100 + "ms/query");
 
-                    var stopwatchAll = new Stopwatch();
-                    stopwatchAll.Start();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            var finalByteCount = GC.GetTotalMemory(true);
 
-                    var queryParser = new MultiFieldQueryParser(Version.LUCENE_30,
-                        new[] { "title", "bodies" },
-                        new StandardAnalyzer(Version.LUCENE_30)
-                        );
-
-                    var facetFieldInfos = new List<FacetFieldInfo>
-                    {
-                        new FacetFieldInfo{ FieldName = "userdisplayname",MaxToFetchExcludingSelections   = 20},
-                        new FacetFieldInfo{ FieldName = "tag", MaxToFetchExcludingSelections   = 20},
-                    };
-
-                    for (int i = 0; i < 100; i++)
-                    {
-                        var stopwatch = new Stopwatch();
-                        stopwatch.Start();
-                        var query = queryParser.Parse("mysql");
-                        var actual = _target.SearchWithFacets(query, 100, facetFieldInfos);
-                        stopwatch.Stop();
-
-                        foreach (var groupy in actual.Facets.Select(x => x.FacetFieldName).Distinct())
-                        {
-                            string @group = groupy;
-                            System.IO.File.WriteAllLines(@"d:\\temp2\\" + group + ".txt",actual.Facets.Where(x=>x.FacetFieldName == group).Select(x=>x.Value + ":" + x.Count));
-                        }
-                        var vs = stopwatch.ElapsedMilliseconds;
-                        Console.WriteLine("Took " + vs + " ms");
-                    }
-                    stopwatchAll.Stop();
-                    var vs2 = stopwatchAll.ElapsedMilliseconds;
-                    Console.WriteLine("Took " + vs2 + " ms - i.e " + vs2/100 + "ms/query");
-
-                     GC.Collect();
-                     GC.WaitForPendingFinalizers();
-                    long finalByteCount = GC.GetTotalMemory(true);
-
-                    Console.WriteLine("START: " + originalByteCount + " END:" + finalByteCount);
-                    Console.WriteLine("DIFF: " + (finalByteCount - originalByteCount));
-
-                }
-
-
-
+            Console.WriteLine("START: " + originalByteCount + " END:" + finalByteCount);
+            Console.WriteLine("DIFF: " + (finalByteCount - originalByteCount));
+        }
 
 
         private static string GenerateFruit()
@@ -152,11 +149,9 @@ namespace PerformanceTest
             return "color" + GetRandom(1000, 1100); // 30 different values
         }
 
-        private static Random _rnd = new Random(Guid.NewGuid().GetHashCode());
         private static string GetRandom(int i, int i1)
         {
             return _rnd.Next(i, i1).ToString("00000");
         }
-
     }
 }

@@ -93,7 +93,7 @@ Sample usage explains it best:
         }
 
 
-Some more background is available at http://www.stefanholmberg.com/post/2014/06/05/Lucenenet-and-multiple-facets
+Some more background is available at http://stefanholmberg.com/tag/facets/
 
 DEMO SITE
 =========

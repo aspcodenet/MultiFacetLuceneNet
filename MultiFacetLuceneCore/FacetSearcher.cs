@@ -87,7 +87,7 @@ namespace MultiFacetLucene
             
                 do
                 {
-                if (termReader.Term != null)
+                if (termReader.Term != null && termReader.Term.Bytes.Length > 0)
                 {
                     var termString = System.Text.Encoding.UTF8.GetString(termReader.Term.Bytes).TrimEnd('\0');
                     var bitset = CalculateOpenBitSetDisi(facetAttributeFieldName, termReader.Term);
@@ -144,7 +144,7 @@ namespace MultiFacetLucene
             var calculations = 0;
 
             var queryFilter = new CachingWrapperFilter(new QueryWrapperFilter(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, allFacetFieldInfos, facetFieldInfoToCalculateFor.FieldName)));
-
+            var docIdSet = GetDocIdSet(queryFilter);
             var calculatedFacetCounts = new ResultCollection(facetFieldInfoToCalculateFor);
             foreach (var facetValueBitSet in GetOrCreateFacetBitSet(facetFieldInfoToCalculateFor.FieldName).FacetValueBitSetList)
             {
@@ -156,7 +156,7 @@ namespace MultiFacetLucene
                         break;
                 }
 
-                OpenBitSetDISI baseQueryWithoutFacetDrilldownCopy = new OpenBitSetDISI(GetDocIdSet(queryFilter).GetIterator(), 1);// changed
+                OpenBitSetDISI baseQueryWithoutFacetDrilldownCopy = new OpenBitSetDISI(docIdSet.GetIterator(), 1);// changed
 
                 var bitset = facetValueBitSet.Bitset ?? CalculateOpenBitSetDisi(facetFieldInfoToCalculateFor.FieldName, new BytesRef(facetValueBitSet.Value));
                 baseQueryWithoutFacetDrilldownCopy.And(bitset);

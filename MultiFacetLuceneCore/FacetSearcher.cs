@@ -87,18 +87,18 @@ namespace MultiFacetLucene
             
                 do
                 {
-                if (termReader.Term != null && termReader.Term.Bytes.Length > 0)
-                {
-                    var termString = System.Text.Encoding.UTF8.GetString(termReader.Term.Bytes).TrimEnd('\0');
-                    var bitset = CalculateOpenBitSetDisi(facetAttributeFieldName, termReader.Term);
-                    var cnt = bitset.Cardinality();
-                    if (cnt >= FacetSearcherConfiguration.MinimumCountInTotalDatasetForFacet)
-                        yield return new FacetValues.FacetValueBitSet { Value = termString, Bitset = bitset, Count = cnt };
-                    else
+                    if (termReader.Term != null && termReader.Term.Bytes.Length > 0)
                     {
-                        bitset = null;
+                        var termString = System.Text.Encoding.UTF8.GetString(termReader.Term.Bytes, 0, termReader.Term.Length).TrimEnd('\0');
+                        var bitset = CalculateOpenBitSetDisi(facetAttributeFieldName, termReader.Term);
+                        var cnt = bitset.Cardinality();
+                        if (cnt >= FacetSearcherConfiguration.MinimumCountInTotalDatasetForFacet)
+                            yield return new FacetValues.FacetValueBitSet { Value = termString, Bitset = bitset, Count = cnt };
+                        else
+                        {
+                            bitset = null;
+                        }
                     }
-                }
                 } while (termReader.MoveNext());
         }
 

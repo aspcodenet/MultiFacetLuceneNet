@@ -89,7 +89,7 @@ namespace MultiFacetLucene
                 {
                     if (termReader.Term != null && termReader.Term.Bytes.Length > 0)
                     {
-                        var termString = System.Text.Encoding.UTF8.GetString(termReader.Term.Bytes, 0, termReader.Term.Length).TrimEnd('\0');
+                    var termString = System.Text.Encoding.UTF8.GetString(termReader.Term.Bytes, 0, termReader.Term.Length).TrimEnd('\0');
                         var bitset = CalculateOpenBitSetDisi(facetAttributeFieldName, termReader.Term);
                         var cnt = bitset.Cardinality();
                         if (cnt >= FacetSearcherConfiguration.MinimumCountInTotalDatasetForFacet)
@@ -104,10 +104,17 @@ namespace MultiFacetLucene
 
         protected OpenBitSetDISI CalculateOpenBitSetDisi(string facetAttributeFieldName, BytesRef value)
         {
-            var facetQuery = new TermQuery(new Term(facetAttributeFieldName, value));
-            var facetQueryFilter = new QueryWrapperFilter(facetQuery);
-            var liveDocs = MultiFields.GetLiveDocs(IndexReader);
-            var termDocsEnum = MultiFields.GetTermDocsEnum(IndexReader, liveDocs, facetAttributeFieldName, value);
+            //var facetQuery = new TermQuery(new Term(facetAttributeFieldName, value));
+            //var facetQueryFilter = new QueryWrapperFilter(facetQuery);
+           // var liveDocs = MultiFields.GetLiveDocs(IndexReader);
+            var termDocsEnum = MultiFields.GetTermDocsEnum(IndexReader, null, facetAttributeFieldName, value);
+            return new OpenBitSetDISI(termDocsEnum, IndexReader.MaxDoc);
+        }
+
+        protected OpenBitSetDISI CalculateOpenBitSetDisiForFilteredData(CachingWrapperFilter filter, string facetAttributeFieldName, BytesRef value)
+        {
+           // var liveDocs = MultiFields.GetLiveDocs(IndexReader);
+            var termDocsEnum = MultiFields.GetTermDocsEnum(IndexReader, null, facetAttributeFieldName, value);
             return new OpenBitSetDISI(termDocsEnum, IndexReader.MaxDoc);
         }
 
@@ -142,9 +149,8 @@ namespace MultiFacetLucene
         private IEnumerable<FacetMatch> FindMatchesInQuery(Query baseQueryWithoutFacetDrilldown, IList<FacetFieldInfo> allFacetFieldInfos, FacetFieldInfo facetFieldInfoToCalculateFor)
         {
             var calculations = 0;
-
             var queryFilter = new CachingWrapperFilter(new QueryWrapperFilter(CreateFacetedQuery(baseQueryWithoutFacetDrilldown, allFacetFieldInfos, facetFieldInfoToCalculateFor.FieldName)));
-            var docIdSet = GetDocIdSet(queryFilter);
+       //     var docIdSet = GetDocIdSet(queryFilter);
             var calculatedFacetCounts = new ResultCollection(facetFieldInfoToCalculateFor);
             foreach (var facetValueBitSet in GetOrCreateFacetBitSet(facetFieldInfoToCalculateFor.FieldName).FacetValueBitSetList)
             {
@@ -156,11 +162,8 @@ namespace MultiFacetLucene
                         break;
                 }
 
-                OpenBitSetDISI baseQueryWithoutFacetDrilldownCopy = new OpenBitSetDISI(docIdSet.GetIterator(), 1);// changed
-
                 var bitset = facetValueBitSet.Bitset ?? CalculateOpenBitSetDisi(facetFieldInfoToCalculateFor.FieldName, new BytesRef(facetValueBitSet.Value));
-                baseQueryWithoutFacetDrilldownCopy.And(bitset);
-                var count = baseQueryWithoutFacetDrilldownCopy.Cardinality();
+                var count = GetFacetCountFromMultipleIndices(queryFilter, bitset);
                 if (count == 0)
                     continue;
                 var match = new FacetMatch
@@ -180,6 +183,21 @@ namespace MultiFacetLucene
             return calculatedFacetCounts.GetList();
         }
 
+        private long GetFacetCountFromMultipleIndices(CachingWrapperFilter filter, OpenBitSetDISI facetValueBitSet)
+        {
+            long count = 0;
+            foreach (AtomicReaderContext ctx in IndexReader.Leaves)
+            {
+                AtomicReader atomicReader = ctx.AtomicReader;
+                // TODO: Poznamka pro priste, az budu resit ze se spatne hledaji pocty facetu, zda se ze to souvisi s NULL hodnotama, mozna vyfiltrovat not NULL?
+
+                OpenBitSetDISI baseQueryWithoutFacetDrilldownCopy = new OpenBitSetDISI(filter.GetDocIdSet(atomicReader.AtomicContext, atomicReader.LiveDocs)?.GetIterator(), atomicReader.MaxDoc);
+                baseQueryWithoutFacetDrilldownCopy.And(facetValueBitSet);
+                count += baseQueryWithoutFacetDrilldownCopy.Cardinality();
+            }
+            
+            return count;
+        }
 
         protected Query CreateFacetedQuery(Query baseQueryWithoutFacetDrilldown, IList<FacetFieldInfo> facetFieldInfos, string facetAttributeFieldName)
         {

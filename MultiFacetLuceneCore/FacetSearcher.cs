@@ -190,10 +190,13 @@ namespace MultiFacetLucene
             {
                 AtomicReader atomicReader = ctx.AtomicReader;
                 // TODO: Poznamka pro priste, az budu resit ze se spatne hledaji pocty facetu, zda se ze to souvisi s NULL hodnotama, mozna vyfiltrovat not NULL?
-
-                OpenBitSetDISI baseQueryWithoutFacetDrilldownCopy = new OpenBitSetDISI(filter.GetDocIdSet(atomicReader.AtomicContext, atomicReader.LiveDocs)?.GetIterator(), atomicReader.MaxDoc);
-                baseQueryWithoutFacetDrilldownCopy.And(facetValueBitSet);
-                count += baseQueryWithoutFacetDrilldownCopy.Cardinality();
+                var iterator = filter.GetDocIdSet(atomicReader.AtomicContext, atomicReader.LiveDocs)?.GetIterator();
+                if (iterator != null)
+                {
+                    OpenBitSetDISI baseQueryWithoutFacetDrilldownCopy = new OpenBitSetDISI(iterator, atomicReader.MaxDoc);
+                    baseQueryWithoutFacetDrilldownCopy.And(facetValueBitSet);
+                    count += baseQueryWithoutFacetDrilldownCopy.Cardinality();
+                }
             }
             
             return count;

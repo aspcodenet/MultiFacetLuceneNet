@@ -1,13 +1,15 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.30110.0
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30804.86
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiFacetLucene", "MultiFacetLucene\MultiFacetLucene.csproj", "{086093FD-D444-48BE-B897-7FAC14133C23}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiFacetLuceneNet.Tests", "MultiFacetLuceneNet.Tests\MultiFacetLuceneNet.Tests.csproj", "{F29DAEA8-7267-4230-B2F6-70062D2E890B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PerformanceTest", "PerformanceTest\PerformanceTest.csproj", "{0065E899-596D-4B16-9CF5-E917DD957DAB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiFacetLuceneCore", "MultiFacetLuceneCore\MultiFacetLuceneCore.csproj", "{9B663767-33DD-4289-A31A-43D900888723}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,8 +29,15 @@ Global
 		{0065E899-596D-4B16-9CF5-E917DD957DAB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0065E899-596D-4B16-9CF5-E917DD957DAB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0065E899-596D-4B16-9CF5-E917DD957DAB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B663767-33DD-4289-A31A-43D900888723}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B663767-33DD-4289-A31A-43D900888723}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B663767-33DD-4289-A31A-43D900888723}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B663767-33DD-4289-A31A-43D900888723}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {909A5A92-A780-43DF-9CA5-3B75CE15DD4B}
 	EndGlobalSection
 EndGlobal

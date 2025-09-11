@@ -11,9 +11,13 @@ To implement a multi-select facet for doctype, a GUI may want to still display t
 
 
 === Document Type ===
+
   [ ] Word (42)
+
   [x] PDF  (96)
+  
   [ ] Excel(11)
+  
   [ ] HTML (63)
 
 
